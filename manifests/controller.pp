@@ -91,7 +91,6 @@ class openstack::controller(
   $horizon_app_links       = false,
   $enabled                 = true
 ) {
-  include stdlib
   $nova_db_password_uri     = uriescape($nova_db_password)
   $glance_db_password_uri   = uriescape($glance_db_password)
 
