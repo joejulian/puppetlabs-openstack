@@ -89,7 +89,15 @@ class openstack::controller(
   $swift                   = false,
   $quantum                 = false,
   $horizon_app_links       = false,
-  $enabled                 = true
+  $enabled                 = true,
+  # Class overrides - These can be specified to override the standard
+  # set of classes this module depends on
+  $mysql_class             = 'mysql',
+  $keystone_class          = 'keystone',
+  $glance_class            = 'glance',
+  $nova_class              = 'nova',
+  $memcached_class         = 'memcached',
+  $horizon_class           = 'horizon'
 ) {
 
   $glance_api_servers = "${internal_address}:9292"
@@ -116,7 +124,7 @@ class openstack::controller(
   ####### DATABASE SETUP ######
 
   # set up mysql server
-  class { 'mysql::server':
+  class { "${mysql_class}::server":
     config_hash => {
       # the priv grant fails on precise if I set a root password
       # TODO I should make sure that this works
@@ -127,16 +135,16 @@ class openstack::controller(
   }
   if ($enabled) {
     # set up all openstack databases, users, grants
-    class { 'keystone::db::mysql':
+    class { "${keystone_class}::db::mysql":
       password => $keystone_db_password,
     }
-    Class['glance::db::mysql'] -> Class['glance::registry']
-    class { 'glance::db::mysql':
+    Class["${glance_class}::db::mysql"] -> Class["${glance_class}::registry"]
+    class { "${glance_class}::db::mysql":
       host     => '127.0.0.1',
       password => $glance_db_password,
     }
     # TODO should I allow all hosts to connect?
-    class { 'nova::db::mysql':
+    class { "${nova_class}::db::mysql":
       password      => $nova_db_password,
       host          => $internal_address,
       allowed_hosts => '%',
@@ -146,7 +154,7 @@ class openstack::controller(
   ####### KEYSTONE ###########
 
   # set up keystone
-  class { 'keystone':
+  class { ${keystone_class}:
     admin_token  => $keystone_admin_token,
     # we are binding keystone on all interfaces
     # the end user may want to be more restrictive
@@ -158,38 +166,38 @@ class openstack::controller(
   }
   # set up keystone database
   # set up the keystone config for mysql
-  class { 'keystone::config::mysql':
+  class { "${keystone_class}::config::mysql":
     password => $keystone_db_password,
   }
 
   if ($enabled) {
     # set up keystone admin users
-    class { 'keystone::roles::admin':
+    class { "${keystone_class}::roles::admin":
       email        => $admin_email,
       password     => $admin_password,
       admin_tenant => $keystone_admin_tenant,
     }
     # set up the keystone service and endpoint
-    class { 'keystone::endpoint':
+    class { "${keystone_class}::endpoint":
       public_address   => $public_address,
       internal_address => $internal_address,
       admin_address    => $admin_address,
     }
     # set up glance service,user,endpoint
-    class { 'glance::keystone::auth':
+    class { "${glance_class}::keystone::auth":
       password         => $glance_user_password,
       public_address   => $public_address,
       internal_address => $internal_address,
       admin_address    => $admin_address,
-      before           => [Class['glance::api'], Class['glance::registry']]
+      before           => [Class["${glance_class}::api"], Class["${glance_class}::registry"]]
     }
     # set up nova serice,user,endpoint
-    class { 'nova::keystone::auth':
+    class { "${nova_class}::keystone::auth":
       password         => $nova_user_password,
       public_address   => $public_address,
       internal_address => $internal_address,
       admin_address    => $admin_address,
-      before           => Class['nova::api'],
+      before           => Class["${nova_class}::api"],
     }
   }
 
@@ -198,7 +206,7 @@ class openstack::controller(
   ######## BEGIN GLANCE ##########
 
 
-  class { 'glance::api':
+  class { "${glance_class}::api":
     log_verbose       => $verbose,
     log_debug         => $verbose,
     auth_type         => 'keystone',
@@ -209,9 +217,9 @@ class openstack::controller(
     keystone_password => $glance_user_password,
     enabled           => $enabled,
   }
-  class { 'glance::backend::file': }
+  class { "${glance_class}::backend::file": }
 
-  class { 'glance::registry':
+  class { "${glance_class}::registry":
     log_verbose       => $verbose,
     log_debug         => $verbose,
     auth_type         => 'keystone',
@@ -229,7 +237,7 @@ class openstack::controller(
   ######## BEGIN NOVA ###########
 
 
-  class { 'nova::rabbitmq':
+  class { "${nova_class}::rabbitmq":
     userid   => $rabbit_user,
     password => $rabbit_password,
     enabled  => $enabled,
@@ -237,7 +245,7 @@ class openstack::controller(
 
   # TODO I may need to figure out if I need to set the connection information
   # or if I should collect it
-  class { 'nova':
+  class { ${nova_class}:
     sql_connection     => $sql_connection,
     # this is false b/c we are exporting
     rabbit_host        => $rabbit_connection,
@@ -248,7 +256,7 @@ class openstack::controller(
     verbose            => $verbose,
   }
 
-  class { 'nova::api':
+  class { "${nova_class}::api":
     enabled           => $enabled,
     # TODO this should be the nova service credentials
     #admin_tenant_name => 'openstack',
@@ -260,11 +268,11 @@ class openstack::controller(
   }
 
   class { [
-    'nova::cert',
-    'nova::consoleauth',
-    'nova::scheduler',
-    'nova::objectstore',
-    'nova::vncproxy'
+    "${nova_class}::cert",
+    "${nova_class}::consoleauth",
+    "${nova_class}::scheduler",
+    "${nova_class}::objectstore",
+    "${nova_class}::vncproxy"
   ]:
     enabled => $enabled,
   }
@@ -287,7 +295,7 @@ class openstack::controller(
   }
 
   # set up networking
-  class { 'nova::network':
+  class { "${nova_class}::network":
     private_interface => $private_interface,
     public_interface  => $public_interface,
     fixed_range       => $fixed_range,
@@ -308,11 +316,11 @@ class openstack::controller(
 
   # TOOO - what to do about HA for horizon?
 
-  class { 'memcached':
+  class { ${memcached_class}:
     listen_ip => '127.0.0.1',
   }
 
-  class { 'horizon':
+  class { ${horizon_class}:
     secret_key => $secret_key,
     cache_server_ip => $cache_server_ip,
     cache_server_port => $cache_server_port,
