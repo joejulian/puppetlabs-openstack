@@ -91,9 +91,12 @@ class openstack::controller(
   $horizon_app_links       = false,
   $enabled                 = true
 ) {
+  include stdlib
+  $nova_db_password_uri     = uriescape($nova_db_password)
+  $glance_db_password_uri   = uriescape($glance_db_password)
 
   $glance_api_servers = "${internal_address}:9292"
-  $nova_db = "mysql://nova:${nova_db_password}@${internal_address}/nova"
+  $nova_db = "mysql://nova:${nova_db_password_uri}@${internal_address}/nova"
 
   if ($export_resources) {
     # export all of the things that will be needed by the clients
@@ -220,7 +223,7 @@ class openstack::controller(
     keystone_tenant   => 'services',
     keystone_user     => 'glance',
     keystone_password => $glance_user_password,
-    sql_connection    => "mysql://glance:${glance_db_password}@127.0.0.1/glance",
+    sql_connection    => "mysql://glance:${glance_db_password_uri}@127.0.0.1/glance",
     enabled           => $enabled,
   }
 

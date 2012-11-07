@@ -83,7 +83,9 @@ class openstack::all(
   $libvirt_type            = 'kvm',
   $nova_volume             = 'nova-volumes'
 ) {
-
+  include stdlib
+  $nova_db_password_uri     = uriescape($nova_db_password)
+  $glance_db_password_uri   = uriescape($glance_db_password)
 
   #
   # indicates that all nova config entries that we did
@@ -171,7 +173,7 @@ class openstack::all(
     keystone_tenant   => 'services',
     keystone_user     => 'glance',
     keystone_password => $glance_user_password,
-    sql_connection    => "mysql://glance:${glance_db_password}@127.0.0.1/glance",
+    sql_connection    => "mysql://glance:${glance_db_password_uri}@127.0.0.1/glance",
   }
 
 
@@ -195,7 +197,7 @@ class openstack::all(
   }
 
   class { 'nova':
-    sql_connection     => "mysql://nova:${nova_db_password}@localhost/nova",
+    sql_connection     => "mysql://nova:${nova_db_password_uri}@localhost/nova",
     rabbit_userid      => $rabbit_user,
     rabbit_password    => $rabbit_password,
     image_service      => 'nova.image.glance.GlanceImageService',
